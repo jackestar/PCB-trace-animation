@@ -1,0 +1,12 @@
+{
+  "name": "pcb-maker",
+  "version": "1.0.0",
+  "description": "A library for generating PCB-like line patterns on an HTML5 canvas.",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["pcb", "canvas", "animation"],
+  "author": "Tu Nombre",
+  "license": "ISC"
+}
