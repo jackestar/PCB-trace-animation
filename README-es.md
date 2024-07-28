@@ -15,7 +15,7 @@ npm install pcb-maker
 ## Uso
 
 ```javascript
-import PCBMaker from 'PCB-trace-animation';
+import PCBMaker from 'pcb-trace-animation';
 
 const canvas = document.querySelector("canvas.headerCanvas");
 const pcbMaker = new PCBMaker(canvas, "AutoRightBottom");

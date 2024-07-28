@@ -1,5 +1,5 @@
 {
-  "name": "pcb-maker",
+  "name": "pcb-trace-animation",
   "version": "1.0.0",
   "description": "A library for generating PCB-like line patterns on an HTML5 canvas.",
   "main": "src/index.js",
