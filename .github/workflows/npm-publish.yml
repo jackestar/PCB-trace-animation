@@ -5,7 +5,7 @@ name: pcb-trace-animation
 
 on:
   release:
-    types: [created]
+    types: [published, created]
 
 jobs:
   build:
