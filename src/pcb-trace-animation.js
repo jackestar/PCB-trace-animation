@@ -1,242 +1,218 @@
-class PCBMaker {
-    constructor(canvas, location = "Center") {
-
-        // User Config
-        this.canvas = canvas;               // Canvas Object
-        this.location = location;           // Object Position
-        this.color = "#000";                // Trace color
-        this.autoResize = true;             // Auto resize on changes
-        this.autoFitSizes = true;           // Generate Sizes
-        this.squareSize = 0;                // (!autoFitSizes) square size
-        this.lineSpeed = 4;                 // line speed
-        this.lineSpacing = 10;              // (!autoFitSizes) IC line space
-        this.minLength = this.lineSpeed*2;  // min IC length before change direction or end
-        this.lineWidth = 3;                 // (!autoFitSizes) line width
-        this.endCoefficient = 0.005         // end chance
-        this.CustomPosX = 0;                // Custom Position in X
-        this.CustomPosY = 0;                // Custom Position in Y
-        
-        this.square = {};
+class PCBTraceAnimation {
+    constructor(traceElement, options = {}) {
+        this.traceElement = traceElement;
+        this.options = {
+            traceColor: options.traceColor || options.color || "#000",
+            viaColor: options.viaColor || options.color || "#000",
+            autoResize: options.autoResize !== undefined ? options.autoResize : true,
+            speed: options.speed || 4,
+            // Grid resolution: roughly equal to lineWidth works best
+            gridResolution: options.gridResolution || Math.max(2, options.lineWidth || 3),
+            lineSpacing: options.lineSpacing || 10,
+            minLength: options.minLength || 10,
+            lineWidth: options.lineWidth || 3,
+            lineMargin: options.lineMargin || 10,
+            lineAngleVariation: options.lineAngleVariation || 0.008,
+            lineEndCoefficient: options.lineEndCoefficient || 0.005
+        };
 
         this.lines = [];
-        this.linePosition = 0;
-        this.endPosition = 0;
-        this.ends = [];
-
-        
-        this.halfPI = Math.PI / 2;
-        this.quarterPI = Math.PI / 4;
-        this.doublePI = Math.PI * 2;
-
-        this.ctx = canvas.getContext('2d');
+        this.ctx = traceElement.getContext('2d');
         this.width = 0;
         this.height = 0;
+
+        this.grid = null;
+        this.gridCols = 0;
+        this.gridRows = 0;
+
+        this.PIQ = Math.PI / 4;
+        this.PIT = 2 * Math.PI;
+        this.PIH = Math.PI / 2;
         this.animationFrameId = null;
-        this.observer = '';
+        this.running = false;
+        this.resizeObserver = null;
     }
 
-    generatePCB() {
-        if (this.autoResize) {
-            this.observer = new ResizeObserver(this.makePCB.bind(this));
-            this.observer.observe(this.canvas)
-        }
-            // window.addEventListener('resize', this.makePCB.bind(this), true);
-        this.makePCB();
-    }
-
-    stopPCB() {
-        this.observer.disconnect()
-        cancelAnimationFrame(this.animationFrameId);
-    }
-
-    makePCB() {
-        this.linePosition = 0;
-        this.endPosition = 0;
-        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-
-        this.lines.length = 0;
-        this.ends.length = 0;
-
+    initCanvas() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
-        this.canvas.width = this.width;
-        this.canvas.height = this.height;
-        this.squareSize = this.autoFitSizes ? ((this.width < this.height ? this.width : this.height) / 3) : this.squareSize;
+        this.traceElement.width = this.width;
+        this.traceElement.height = this.height;
+        this.ctx.lineCap = "round"; // Round makes corners look better
 
-        let posx = 0;
-        let posy = 0;
-        switch (this.location) {
-            case "Center":
-                posx = (this.width - this.squareSize) / 2;
-                posy = (this.height - this.squareSize) / 2;
-                break;
-            case "HalfLeft":
-                posx = -(this.squareSize) / 2;
-                posy = (this.height - this.squareSize) / 2;
-                break;
-            case "HalfRight":
-                posx = (this.width - this.squareSize / 2);
-                posy = (this.height - this.squareSize) / 2;
-                break;
-            case "HalfTop":
-                posx = (this.width - this.squareSize) / 2;
-                posy = -(this.squareSize) / 2;
-                break;
-            case "HalfBottom":
-                posx = (this.width - this.squareSize) / 2;
-                posy = (this.height - this.squareSize / 2);
-                break;
-            case "AutoRightBottom":
-                if (this.width >= this.height) {
-                    posx = (this.width - this.squareSize) * 3 / 4;
-                    posy = (this.height - this.squareSize) / 2;
-                } else {
-                    posx = (this.width - this.squareSize) / 2;
-                    posy = (this.height - this.squareSize) * 3 / 4;
-                }
-                break;
-            case "AutoLeftTop":
-                if (this.width >= this.height) {
-                    posx = (this.width - this.squareSize) * 1 / 4;
-                    posy = (this.height - this.squareSize) / 2;
-                } else {
-                    posx = (this.width - this.squareSize) / 2;
-                    posy = (this.height - this.squareSize) * 1 / 4;
-                }
-                break;
-            case "HalfRightBottom":
-                if (this.width >= this.height) {
-                    posx = (this.width - this.squareSize / 2);
-                    posy = (this.height - this.squareSize) / 2;
-                } else {
-                    posx = (this.width - this.squareSize) / 2;
-                    posy = (this.height - this.squareSize / 2);
-                }
-                break;
-            case "HalfLeftTop":
-                if (this.width >= this.height) {
-                    posx = -(this.squareSize) / 2;
-                    posy = (this.height - this.squareSize) / 2;
-                } else {
-                    posx = (this.width - this.squareSize) / 2;
-                    posy = -(this.squareSize) / 2;
-                }
-                break;
-            case "Custom":
-                posx = this.CustomPosX;
-                posy = this.CustomPosY;
-                break;
+        this.gridCols = Math.ceil(this.width / this.options.gridResolution);
+        this.gridRows = Math.ceil(this.height / this.options.gridResolution);
+        this.grid = new Uint8Array(this.gridCols * this.gridRows);
+    }
+
+    // Helper: Mark a coordinate as occupied
+    markGrid(x, y) {
+        if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
+        const gx = (x / this.options.gridResolution) | 0;
+        const gy = (y / this.options.gridResolution) | 0;
+        if (gx >= 0 && gx < this.gridCols && gy >= 0 && gy < this.gridRows) {
+            this.grid[gy * this.gridCols + gx] = 1;
         }
-
-        this.square = { x: posx, y: posy, size: this.squareSize };
-        this.ctx.lineWidth = this.autoFitSizes ? (Math.floor(((this.width < this.height ? this.width : this.height) * 2) / 1000)) : this.lineWidth ;
-        this.lineSpacing = this.autoFitSizes ? (8 + this.ctx.lineWidth * 2) : this.lineSpacing;
-        this.createLinesFromEdges();
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        this.ctx.strokeStyle = this.color;
-        this.ctx.strokeRect(this.square.x, this.square.y, this.square.size, this.square.size);
-        this.animate();
     }
 
-    drawLine(line) {
-        this.ctx.beginPath();
-        this.ctx.moveTo(line.x1, line.y1);
-        this.ctx.lineTo(line.x2, line.y2);
-        this.ctx.stroke();
+    // Helper: Get Grid Coordinates (for comparison)
+    getGridCoords(x, y) {
+        return {
+            gx: (x / this.options.gridResolution) | 0,
+            gy: (y / this.options.gridResolution) | 0
+        };
     }
 
-    drawCircles(circle) {
+    isColliding(x, y) {
+        if (x < 0 || x >= this.width || y < 0 || y >= this.height) return true;
+        const gx = (x / this.options.gridResolution) | 0;
+        const gy = (y / this.options.gridResolution) | 0;
+        
+        if (gx >= 0 && gx < this.gridCols && gy >= 0 && gy < this.gridRows) {
+            return this.grid[gy * this.gridCols + gx] === 1;
+        }
+        return true;
+    }
+
+    markLineSegment(x1, y1, x2, y2) {
+        const dist = Math.hypot(x2 - x1, y2 - y1);
+        // Using roughly 1 step per grid pixel ensures coverage without overkill
+        const steps = Math.ceil(dist / (this.options.gridResolution * 0.8)); 
+
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const px = x1 + (x2 - x1) * t;
+            const py = y1 + (y2 - y1) * t;
+            this.markGrid(px, py);
+        }
+    }
+
+    drawVia(x, y) {
+        this.ctx.fillStyle = this.options.viaColor;
         this.ctx.beginPath();
-        this.ctx.arc(circle.x, circle.y, 2, 0, this.doublePI);
-        this.ctx.stroke();
-        this.ctx.fillStyle = this.color;
+        // Via slightly larger than line width looks best
+        const radius = this.options.lineWidth; 
+        this.ctx.arc(x, y, radius, 0, this.PIT);
         this.ctx.fill();
     }
 
-    createLinesFromEdges() {
-        const numLinesPerEdge = Math.floor(this.square.size / this.lineSpacing);
-        this.numEnds = (numLinesPerEdge - 1) * 4;
+    drawLine(posX, posY, length, isHorizontal = true, isInverted = false) {
+        const startX = this.width * posX;
+        const startY = this.height * posY;
+        const lineLength = isHorizontal ? this.width * length : this.height * length;
+        const endX = startX + (isHorizontal ? lineLength : 0);
+        const endY = startY + (isHorizontal ? 0 : lineLength);
 
-        for (let i = 1; i < numLinesPerEdge; i++) {
-            let x1 = this.square.x + i * this.lineSpacing;
-            let y1 = this.square.y;
-            this.lines.push({ x1, y1, x2: x1, y2: y1 - this.lineSpeed, angle: -this.halfPI, length: 0, lastAngle: -1 });
-        }
+        this.ctx.strokeStyle = this.options.traceColor;
+        this.ctx.lineWidth = this.options.lineWidth;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startX, startY);
+        this.ctx.lineTo(endX, endY);
+        this.ctx.stroke();
 
-        for (let i = 1; i < numLinesPerEdge; i++) {
-            let x1 = this.square.x + this.square.size;
-            let y1 = this.square.y + i * this.lineSpacing;
-            this.lines.push({ x1, y1, x2: x1 + this.lineSpeed, y2: y1, angle: 0, length: 0, lastAngle: -1 });
-        }
+        this.markLineSegment(startX, startY, endX, endY);
 
-        for (let i = 1; i < numLinesPerEdge; i++) {
-            let x1 = this.square.x + i * this.lineSpacing;
-            let y1 = this.square.y + this.square.size;
-            this.lines.push({ x1, y1, x2: x1, y2: y1 + this.lineSpeed, angle: this.halfPI, length: 0, lastAngle: -1 });
-        }
+        const lineContent = this.options.lineSpacing + this.options.lineWidth;
+        const lineAmount = (lineLength - this.options.lineMargin) / lineContent;
 
-        for (let i = 1; i < numLinesPerEdge; i++) {
-            let x1 = this.square.x;
-            let y1 = this.square.y + i * this.lineSpacing;
-            this.lines.push({ x1, y1, x2: x1 - this.lineSpeed, y2: y1, angle: Math.PI, length: 0, lastAngle: -1 });
+        let lineActPos = this.options.lineMargin + (isHorizontal ? startX : startY);
+
+        for (let line = 0; line < lineAmount; line++) {
+            const lx = isHorizontal ? lineActPos : startX;
+            const ly = isHorizontal ? startY : lineActPos;
+            
+            this.markGrid(lx, ly);
+
+            this.lines.push({
+                x: lx,
+                y: ly,
+                angle: (isInverted ? Math.PI : 0) + (isHorizontal ? this.PIH : 0),
+            });
+            lineActPos += lineContent;
         }
     }
 
-    updateLine(line) {
-        let oldAngle = line.angle;
-        if (line.length >= this.minLength && Math.random() < 0.008) {
-            const randomAngle = (Math.random() < 0.5 ? 1 : -1) * this.quarterPI;
-            line.angle += randomAngle;
-        }
-        const newX2 = line.x2 + this.lineSpeed * Math.cos(line.angle);
-        const newY2 = line.y2 + this.lineSpeed * Math.sin(line.angle);
-        if (line.angle != oldAngle) {
-            line.lastAngle = oldAngle;
-        }
-        if (Math.random() > this.endCoefficient || line.length <= this.minLength / 2) {
-            if (!this.checkCollision(newX2, newY2)) {
-                this.lines.push({ x1: line.x2, y1: line.y2, x2: newX2, y2: newY2, angle: line.angle, length: line.length + this.lineSpeed, lastAngle: line.lastAngle });
-            } else {
-                this.lines.push({ x1: line.x2, y1: line.y2, x2: newX2, y2: newY2, angle: line.lastAngle, length: line.length + this.lineSpeed, lastAngle: line.lastAngle });
+    frame() {
+        for (let i = this.lines.length - 1; i >= 0; i--) {
+            const line = this.lines[i];
+
+            // 1. Calculate future position
+            const dx = Math.cos(line.angle) * this.options.speed;
+            const dy = Math.sin(line.angle) * this.options.speed;
+            
+            const newX = line.x + dx;
+            const newY = line.y + dy;
+
+            // 2. Look Ahead slightly further than speed to anticipate walls
+            const lookAheadDist = this.options.speed + (this.options.gridResolution / 2);
+            const lookAheadX = line.x + (Math.cos(line.angle) * lookAheadDist);
+            const lookAheadY = line.y + (Math.sin(line.angle) * lookAheadDist);
+
+            // 3. OPTIMAL COLLISION CHECK
+            // We only care about collision if we are hitting a NEW grid cell.
+            // If the lookAhead point is in the SAME grid cell as our current point,
+            // we are just moving through our own tunnel. Ignore it.
+            const currentGrid = this.getGridCoords(line.x, line.y);
+            const nextGrid = this.getGridCoords(lookAheadX, lookAheadY);
+            
+            const isMovingToNewCell = (currentGrid.gx !== nextGrid.gx || currentGrid.gy !== nextGrid.gy);
+            
+            // Check collision only if we are stepping into new territory
+            if (isMovingToNewCell && this.isColliding(lookAheadX, lookAheadY)) {
+                // Real collision (or wall) detected. Stop line.
+                this.lines.splice(i, 1);
+                
+                // Optional: If you want a VIA when hitting a wall/line, uncomment next line:
+                // this.drawVia(line.x, line.y); 
+                continue;
             }
-        } else {
-            let x = line.x2;
-            if (Math.random() > 0.5) x += 1;
-            else x -= 1;
-            let y = line.y2;
-            if (Math.random() > 0.5) y += 1;
-            else y -= 1;
-            this.ends.push({ x: x, y: y });
+
+            // 4. Draw & Update
+            this.ctx.strokeStyle = this.options.traceColor;
+            this.ctx.lineWidth = this.options.lineWidth;
+            this.ctx.beginPath();
+            this.ctx.moveTo(line.x, line.y);
+            this.ctx.lineTo(newX, newY);
+            this.ctx.stroke();
+
+            this.markLineSegment(line.x, line.y, newX, newY);
+            line.x = newX;
+            line.y = newY;
+
+            // 5. Random Turn
+            if (Math.random() < this.options.lineAngleVariation) {
+                const delta = (Math.random() < 0.5 ? -this.PIQ : this.PIQ);
+                line.angle = (line.angle + delta + this.PIT) % this.PIT;
+            }
+
+            // 6. Random End (The logic that requires a Via)
+            if (Math.random() < this.options.lineEndCoefficient) {
+                this.lines.splice(i, 1);
+                this.drawVia(line.x, line.y);
+            }
         }
-        line.finished = true;
     }
 
-    checkCollision(x2, y2) {
-        for (let line of this.lines) {
-            if (Math.hypot(x2 - line.x2, y2 - line.y2) < 2) {
-                return true;
-            }
+    start() {
+        if (this.running) return;
+        this.initCanvas();
+        if (this.options.autoResize && typeof ResizeObserver !== 'undefined') {
+            if (this.resizeObserver) this.resizeObserver.disconnect();
+            this.resizeObserver = new ResizeObserver(() => this.initCanvas());
+            this.resizeObserver.observe(this.traceElement);
         }
-        return false;
+        this.running = true;
+        const loop = () => {
+            if (!this.running) return;
+            this.frame();
+            this.animationFrameId = requestAnimationFrame(loop);
+        };
+        loop();
     }
 
-    animate() {
-        if (this.linePosition == this.lines.length && this.endPosition == this.ends.length) cancelAnimationFrame(this.animationFrameId);
-
-        this.lines.forEach(line => {
-            if (!line.finished) {
-                this.updateLine(line);
-            }
-        });
-        this.lines.slice(this.linePosition, this.lines.length).forEach(line => this.drawLine(line));
-
-        this.linePosition = this.lines.length;
-
-        this.ends.slice(this.endPosition, this.ends.length).forEach(circle => this.drawCircles(circle));
-
-        this.endPosition = this.ends.length;
-
-        this.ctx.clearRect(this.square.x + 1, this.square.y + 1, this.square.size - 2, this.square.size - 2);
-        if (this.numEnds > this.ends.length) this.animationFrameId = requestAnimationFrame(this.animate.bind(this));
+    stop() {
+        this.running = false;
+        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
+        if (this.resizeObserver) this.resizeObserver.disconnect();
     }
 }

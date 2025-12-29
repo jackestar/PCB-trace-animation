@@ -2,101 +2,83 @@
 <p align="center"><b>with HTML5 canvas</b></p>
 <hr/>
 
-Library that allows generating random line patterns that simulate PCB traces, generating an animation from the center of an integrated circuit. Implementation example: [Portafolio Jackestar](https://jackestar.netlify.app/)
+Library that allows generating random line patterns that simulate PCB traces, Implementation example: [Portafolio Jackestar](https://jackestar.netlify.app/)
 
-<!-- ## Installation -->
+**Highlights**
+- **Small & dependency-free:** Pure JS, renders to a `<canvas>` 2D context.
+- **Configurable behaviour:** Speed, colors, spacing, and randomness are adjustable via options.
+- **Collision-aware:** Internal grid tracking prevents traces from overlapping already-drawn paths.
 
-<!-- using npm:
+**Quick Start**
 
-```bash
-npm install pcb-maker
-``` -->
+- Add a canvas to your HTML and include the script that exports `PCBTraceAnimation`.
 
-## Usage
-
-```javascript
-import PCBMaker from 'pcb-trace-animation';
-
-const canvas = document.querySelector("canvas.headerCanvas");
-const pcbMaker = new PCBMaker(canvas, "AutoRightBottom");
-pcbMaker.generatePCB();
+```html
+<canvas id="trace" style="width:100%;height:100%;display:block"></canvas>
+<script src="src/pcb-trace-animation.js"></script>
+<script>
+  const canvas = document.getElementById('trace');
+  // Pass options as needed
+  const anim = new PCBTraceAnimation(canvas, {
+    traceColor: '#0f0',
+    viaColor: '#ff0',
+    speed: 4,
+  });
+  anim.start();
+  // call anim.stop() to halt
+</script>
 ```
 
-## Constructor
+**API**
 
-```javascript
-constructor(canvas, location = "Center")
+- `new PCBTraceAnimation(traceElement, options = {})` : Create an instance.
+  - `traceElement` - a `<canvas>` element (2D context will be used).
+  - `options` - configuration object (see options list below).
+- `start()` : Initialize canvas/grid and begin the animation loop.
+- `stop()` : Stop the animation and disconnect resize observer if enabled.
+- `drawLine(...)`, `drawVia(...)`: Utility methods exist on the class (used internally). `drawLine` can be used to draw predefined lines programmatically: `drawLine(posX, posY, length, isHorizontal = true, isInverted = false)`.
+
+**Options & Defaults**
+
+The library accepts an options object. Defaults are taken from the implementation; core options include:
+
+- **`traceColor`**: `#000` — color used for stroke lines (alias: `color`).
+- **`viaColor`**: `#000` — fill color for vias.
+- **`autoResize`**: `true` — when enabled, keeps the canvas sized to window and reinitializes grid on resize.
+- **`speed`**: `4` — pixels per frame movement speed for trace segments.
+- **`gridResolution`**: `Math.max(2, lineWidth || 3)` — internal grid cell size used to track occupied areas.
+- **`lineSpacing`**: `10` — spacing between generated parallel lines.
+- **`minLength`**: `10` — minimum length for something like programmatic line placement (internal use).
+- **`lineWidth`**: `3` — line/stroke width.
+- **`lineMargin`**: `10` — margin from the start of a drawn line before placing generated segments.
+- **`lineAngleVariation`**: `0.008` — per-frame probability a moving segment turns 90°.
+- **`lineEndCoefficient`**: `0.005` — per-frame probability a moving segment ends and draws a via.
+
+Use `color` as a shorthand for `traceColor` when convenient.
+
+**Behavior Notes**
+
+- The library maintains an internal Uint8Array grid of size `ceil(width / gridResolution) * ceil(height / gridResolution)`. When traces are drawn the corresponding grid cells are marked so new traces avoid overlaps.
+- Movement checks use a small "look-ahead" point to anticipate collisions when stepping into a new grid cell; this reduces false positives while allowing tight tunnels.
+- Random turns and random ends add organic variation; tune `lineAngleVariation` and `lineEndCoefficient` to control fracturing vs. long traces.
+
+**Example: Drawing a horizontal line programmatically**
+
+```js
+// Draw a horizontal full-width starter line at 30% height
+anim.drawLine(0, 0.3, 1.0, true, false);
 ```
 
-Parameters
+**Styling & Performance Tips**
 
-- **canvas**: `HTMLCanvasElement` - The canvas element where the PCB will be drawn.
-- **location**: `string` - The position of the object on the canvas. Possible values:
-  - `"Center"`
-  - `"HalfLeft"`
-  - `"HalfRight"`
-  - `"HalfTop"`
-  - `"HalfBottom"`
-  - `"AutoRightBottom"`
-  - `"AutoLeftTop"`
-  - `"HalfRightBottom"`
-  - `"HalfLeftTop"`
-  - `"Custom"`
+- Use `lineWidth` and `gridResolution` in tandem. A grid resolution roughly equal to `lineWidth` generally gives the best visual and collision results.
+- Lower `lineAngleVariation` / `lineEndCoefficient` for longer, straighter traces. Increase `speed` for faster animation, but beware of skipped cells if `speed` becomes much larger than `gridResolution`.
+- Disable `autoResize` if you want to control canvas sizing manually (then call `initCanvas()` on resize if you expose it).
 
-## Properties
+**Demo & Example**
 
-- **canvas**: `HTMLCanvasElement` -  The canvas object.
-- **location**: `string` -  The position of the object on the canvas.
-- **color**: `string` - color: string - The color of the traces. Default value: "#000".
-- **autoResize**: `boolean` -  Automatic resizing when the canvas size changes. Default value: true.
-- **autoFitSizes**: `boolean` -  Automatically generate sizes. Default value: true.
-- **squareSize**: `number` -  Square size (when autoFitSizes is disabled). Default value: 0.
-- **lineSpeed**: `number` -  Line speed. Default value: 4.
-- **lineSpacing**: `number` -  Spacing between IC lines (when autoFitSizes is disabled). Default 
-- **minLength**: `number` -  Minimum trace length before changing direction or ending. Default 
-- **lineWidth**: `number` -  Line width (when autoFitSizes is disabled). Default value: 3.
-- **endCoefficient**: `number` - endCoefficient: number - End probability. Default value: 0.005.
-- **CustomPosX**: `number` -  Custom X position (when location is "Custom"). Default value: 0.
-- **CustomPosY**: `number` -  Custom Y position (when location is "Custom"). Default value: 0.
+See the repository `example/` folder for a minimal runnable demo showing how to wire up the canvas and script.
 
-### Position
+**License**
 
-The center where the animation is generated is defined by the **location** property. The initial value is `"Center"`, which places the animation in the center of the canvas. The options `"Half*"` place the center on the edge of the canvas, showing half of the animation, and the `"Auto**"` properties place the animation according to the width or height of the canvas. `"Half**"` does the same as `"Half*"` and `"Auto*"` combined. The "Custom" option allows the user to adjust the animation center with the **CustomPosX** and **CustomPosY** properties.
-  - `"Center"`
-  - `"HalfLeft"`
-  - `"HalfRight"`
-  - `"HalfTop"`
-  - `"HalfBottom"`
-  - `"AutoRightBottom"`
-  - `"AutoLeftTop"`
-  - `"HalfRightBottom"`
-  - `"HalfLeftTop"`
-  - `"Custom"`
-
-## Methods
-
-`generatePCB()` Generate animation
-
-`stopPCB()` Stop animation
-
-```javascript
-
-const canvas = document.querySelector("canvas");
-const pcbMaker = new PCBMaker(canvas, "AutoRightBottom");
-
-// Configure optional properties
-pcbMaker.color = "#ff0000";
-pcbMaker.lineSpeed = 5;
-
-// Generate PCB
-pcbMaker.generatePCB();
-
-// Stop PCB when necessary
-// pcbMaker.stopPCB();
-
-```
-## TODO
-- Generate only PCB without animation
-- Fix collisions
-- Generate multiple chips on a single canvas
-- minify
+MIT License
