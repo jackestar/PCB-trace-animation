@@ -82,3 +82,10 @@ See the repository `example/` folder for a minimal runnable demo showing how to 
 **License**
 
 MIT License
+
+## TODO
+
+* Better DOC
+* no % logic
+* draw rectangle
+* angle draw
