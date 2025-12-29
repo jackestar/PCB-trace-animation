@@ -5,9 +5,16 @@
     "url": "https://github.com/jackestar/PCB-trace-animation"
   },
   "version": "2.0.0",
+  "scripts": {
+    "test": "node ./src/pcb-trace-animation.js && node ./src/pcb-trace-animation.min.js"
+  },
   "description": "A library for generating PCB-like line patterns on an HTML5 canvas.",
   "main": "src/pcb-trace-animation.js",
-  "keywords": ["pcb", "canvas", "animation"],
+  "keywords": [
+    "pcb",
+    "canvas",
+    "animation"
+  ],
   "author": "jackestar",
   "license": "MIT License"
 }
