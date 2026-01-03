@@ -1,4 +1,4 @@
-class PCBTraceAnimation {
+export default class PCBTraceAnimation {
     constructor(traceElement, options = {}) {
         this.traceElement = traceElement;
         this.options = {

@@ -4,7 +4,7 @@
     "type": "git",
     "url": "git+https://github.com/jackestar/PCB-trace-animation.git"
   },
-  "version": "2.0.1",
+  "version": "2.0.2",
   "scripts": {
     "test": "node ./src/pcb-trace-animation.js && node ./src/pcb-trace-animation.min.js"
   },
