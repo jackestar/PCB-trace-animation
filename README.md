@@ -4,7 +4,19 @@
 
 Library that allows generating random line patterns that simulate PCB traces, Implementation example: [Portafolio Jackestar](https://jackestar.netlify.app/)
 
-**Highlights**
+## Use
+
+```
+npm i pcb-trace-animation
+```
+
+*or pnpm, bun...*
+
+```js
+import PCBTraceAnimation from 'pcb-trace-animation';
+```
+
+## Features
 - **Small & dependency-free:** Pure JS, renders to a `<canvas>` 2D context.
 - **Configurable behaviour:** Speed, colors, spacing, and randomness are adjustable via options.
 - **Collision-aware:** Internal grid tracking prevents traces from overlapping already-drawn paths.
@@ -29,7 +41,7 @@ Library that allows generating random line patterns that simulate PCB traces, Im
 </script>
 ```
 
-**API**
+## Scope
 
 - `new PCBTraceAnimation(traceElement, options = {})` : Create an instance.
   - `traceElement` - a `<canvas>` element (2D context will be used).
@@ -38,7 +50,7 @@ Library that allows generating random line patterns that simulate PCB traces, Im
 - `stop()` : Stop the animation and disconnect resize observer if enabled.
 - `drawLine(...)`, `drawVia(...)`: Utility methods exist on the class (used internally). `drawLine` can be used to draw predefined lines programmatically: `drawLine(posX, posY, length, isHorizontal = true, isInverted = false)`.
 
-**Options & Defaults**
+## Defaults
 
 The library accepts an options object. Defaults are taken from the implementation; core options include:
 
@@ -56,12 +68,6 @@ The library accepts an options object. Defaults are taken from the implementatio
 
 Use `color` as a shorthand for `traceColor` when convenient.
 
-**Behavior Notes**
-
-- The library maintains an internal Uint8Array grid of size `ceil(width / gridResolution) * ceil(height / gridResolution)`. When traces are drawn the corresponding grid cells are marked so new traces avoid overlaps.
-- Movement checks use a small "look-ahead" point to anticipate collisions when stepping into a new grid cell; this reduces false positives while allowing tight tunnels.
-- Random turns and random ends add organic variation; tune `lineAngleVariation` and `lineEndCoefficient` to control fracturing vs. long traces.
-
 **Example: Drawing a horizontal line programmatically**
 
 ```js
@@ -69,11 +75,6 @@ Use `color` as a shorthand for `traceColor` when convenient.
 anim.drawLine(0, 0.3, 1.0, true, false);
 ```
 
-**Styling & Performance Tips**
-
-- Use `lineWidth` and `gridResolution` in tandem. A grid resolution roughly equal to `lineWidth` generally gives the best visual and collision results.
-- Lower `lineAngleVariation` / `lineEndCoefficient` for longer, straighter traces. Increase `speed` for faster animation, but beware of skipped cells if `speed` becomes much larger than `gridResolution`.
-- Disable `autoResize` if you want to control canvas sizing manually (then call `initCanvas()` on resize if you expose it).
 
 **Demo & Example**
 
@@ -85,7 +86,12 @@ MIT License
 
 ## TODO
 
-* Better DOC
+* better DOC
 * no % logic
 * draw rectangle
 * angle draw
+* better comments
+* better CI/CD
+* better test
+- decent example
+- CDN/Module version
