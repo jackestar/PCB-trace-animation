@@ -1,3 +1,7 @@
+const S = Math.SQRT1_2;
+const DIR_X = [1, S, 0, -S, -1, -S, 0, S];
+const DIR_Y = [0, S, 1, S, 0, -S, -1, -S];
+
 export default class PCBTraceAnimation {
     constructor(traceElement, options = {}) {
         this.traceElement = traceElement;
@@ -8,15 +12,18 @@ export default class PCBTraceAnimation {
             speed: options.speed || 4,
             gridResolution: options.gridResolution || Math.max(2, options.lineWidth || 3),
             lineSpacing: options.lineSpacing || 10,
-            minLength: options.minLength || 10,
             lineWidth: options.lineWidth || 3,
-            lineMargin: options.lineMargin || 10,
-            lineAngleVariation: options.lineAngleVariation || 0.008,
-            lineEndCoefficient: options.lineEndCoefficient || 0.005
+            lineMargin: options.lineMargin ?? 10,
+            lineAngleVariation: options.lineAngleVariation ?? 0.008,
+            lineEndCoefficient: options.lineEndCoefficient ?? 0.005,
+            onComplete: options.onComplete ?? null,
         };
 
+        this._tick = this._tick.bind(this);
         this.lines = [];
         this.history = []; // initial drawLine
+        this._vias = [];
+        this._resizeTimer = null;
 
         this.ctx = traceElement.getContext('2d');
         this.width = 0;
@@ -47,22 +54,20 @@ export default class PCBTraceAnimation {
     }
 
     restart() {
-        this.initCanvas();
+        this._reset();
+        if (this.running) this._scheduleFrame();
 
-        this.lines = [];
+    }
 
-        this.history.forEach(args => {
-            this._drawTrace(...args);
-        });
+    cellIndex(x, y) {
+        if (x < 0 || y < 0 || x >= this.width || y >= this.height) return -1;
+        const res = this.options.gridResolution;
+        return ((y / res) | 0) * this.gridCols + ((x / res) | 0);
     }
 
     markGrid(x, y) {
-        if (x < 0 || x >= this.width || y < 0 || y >= this.height) return;
-        const gx = (x / this.options.gridResolution) | 0;
-        const gy = (y / this.options.gridResolution) | 0;
-        if (gx >= 0 && gx < this.gridCols && gy >= 0 && gy < this.gridRows) {
-            this.grid[gy * this.gridCols + gx] = 1;
-        }
+        const i = this.cellIndex(x, y);
+        if (i !== -1) this.grid[i] = 1;
     }
 
     getGridCoords(x, y) {
@@ -70,16 +75,6 @@ export default class PCBTraceAnimation {
             gx: (x / this.options.gridResolution) | 0,
             gy: (y / this.options.gridResolution) | 0
         };
-    }
-
-    isColliding(x, y) {
-        if (x < 0 || x >= this.width || y < 0 || y >= this.height) return true;
-        const gx = (x / this.options.gridResolution) | 0;
-        const gy = (y / this.options.gridResolution) | 0;
-        if (gx >= 0 && gx < this.gridCols && gy >= 0 && gy < this.gridRows) {
-            return this.grid[gy * this.gridCols + gx] === 1;
-        }
-        return true;
     }
 
     markLineSegment(x1, y1, x2, y2) {
@@ -104,7 +99,33 @@ export default class PCBTraceAnimation {
     drawLine(posX, posY, length, isHorizontal = true, isInverted = false) {
         this.history.push([posX, posY, length, isHorizontal, isInverted]);
         this._drawTrace(posX, posY, length, isHorizontal, isInverted);
+        if (this.running) this._scheduleFrame();
     }
+
+    _reset() {
+        this.initCanvas();
+        this.lines = [];
+        this.history.forEach(args => this._drawTrace(...args));
+    }
+
+    _scheduleFrame() {
+        if (this.animationFrameId !== null) return;
+        this.animationFrameId = requestAnimationFrame(this._tick);
+    }
+
+    _tick() {
+        this.animationFrameId = null;
+        if (!this.running) return;
+
+        this.frame();
+
+        if (this.lines.length === 0) {
+            this.options.onComplete?.();
+            return;
+        }
+        this._scheduleFrame();
+    }
+
     _drawTrace(posX, posY, length, isHorizontal, isInverted) {
         const startX = this.width * posX;
         const startY = this.height * posY;
@@ -122,7 +143,7 @@ export default class PCBTraceAnimation {
         this.markLineSegment(startX, startY, endX, endY);
 
         const lineContent = this.options.lineSpacing + this.options.lineWidth;
-        const lineAmount = (lineLength - this.options.lineMargin) / lineContent;
+        const lineAmount = Math.floor((lineLength - this.options.lineMargin) / lineContent);
 
         let lineActPos = this.options.lineMargin + (isHorizontal ? startX : startY);
 
@@ -135,84 +156,87 @@ export default class PCBTraceAnimation {
             this.lines.push({
                 x: lx,
                 y: ly,
-                angle: (isInverted ? Math.PI : 0) + (isHorizontal ? this.PIH : 0),
+                angle: (isInverted ? 4 : 0) + (isHorizontal ? 2 : 0), // dir
             });
             lineActPos += lineContent;
         }
     }
 
     frame() {
-        for (let i = this.lines.length - 1; i >= 0; i--) {
-            const line = this.lines[i];
+        const { ctx } = this;
+        const { speed, gridResolution, lineAngleVariation, lineEndCoefficient } = this.options;
+        const lines = this.lines;
+        const lookAheadDist = speed + gridResolution / 2;
+        const vias = this._vias;
+        vias.length = 0;
 
-            const dx = Math.cos(line.angle) * this.options.speed;
-            const dy = Math.sin(line.angle) * this.options.speed;
+        ctx.strokeStyle = this.options.traceColor;
+        ctx.lineWidth = this.options.lineWidth;
+        ctx.beginPath();
 
-            const newX = line.x + dx;
-            const newY = line.y + dy;
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i];
+            const ux = DIR_X[line.angle];
+            const uy = DIR_Y[line.angle];
 
-            const lookAheadDist = this.options.speed + (this.options.gridResolution / 2);
-            const lookAheadX = line.x + (Math.cos(line.angle) * lookAheadDist);
-            const lookAheadY = line.y + (Math.sin(line.angle) * lookAheadDist);
+            const newX = line.x + ux * speed;
+            const newY = line.y + uy * speed;
 
-            const currentGrid = this.getGridCoords(line.x, line.y);
-            const nextGrid = this.getGridCoords(lookAheadX, lookAheadY);
+            const here = this.cellIndex(line.x, line.y);
+            const ahead = this.cellIndex(line.x + ux * lookAheadDist, line.y + uy * lookAheadDist);
 
-            const isMovingToNewCell = (currentGrid.gx !== nextGrid.gx || currentGrid.gy !== nextGrid.gy);
-
-            if (isMovingToNewCell && this.isColliding(lookAheadX, lookAheadY)) {
-                this.lines.splice(i, 1);
+            if (ahead !== here && (ahead === -1 || this.grid[ahead] === 1)) {
+                this._removeLine(i);
                 continue;
             }
 
-            this.ctx.strokeStyle = this.options.traceColor;
-            this.ctx.lineWidth = this.options.lineWidth;
-            this.ctx.beginPath();
-            this.ctx.moveTo(line.x, line.y);
-            this.ctx.lineTo(newX, newY);
-            this.ctx.stroke();
-
+            ctx.moveTo(line.x, line.y);
+            ctx.lineTo(newX, newY);
             this.markLineSegment(line.x, line.y, newX, newY);
             line.x = newX;
             line.y = newY;
 
-            if (Math.random() < this.options.lineAngleVariation) {
-                const delta = (Math.random() < 0.5 ? -this.PIQ : this.PIQ);
-                line.angle = (line.angle + delta + this.PIT) % this.PIT;
+            if (Math.random() < lineAngleVariation) {
+                line.angle = (line.angle + (Math.random() < 0.5 ? -1 : 1)) & 7;
             }
 
-            if (Math.random() < this.options.lineEndCoefficient) {
-                this.lines.splice(i, 1);
-                this.drawVia(line.x, line.y);
+            if (Math.random() < lineEndCoefficient) {
+                vias.push(line.x, line.y);
+                this._removeLine(i);
             }
         }
+
+        ctx.stroke();
+
+        for (let v = 0; v < vias.length; v += 2) this.drawVia(vias[v], vias[v + 1]);
+    }
+
+    _removeLine(i) {
+        const lines = this.lines;
+        lines[i] = lines[lines.length - 1];
+        lines.pop();
     }
 
     start() {
         if (this.running) return;
-        this.initCanvas();
+        this.running = true;
+        this._reset();
 
         if (this.options.autoResize && typeof ResizeObserver !== 'undefined') {
-            if (this.resizeObserver) this.resizeObserver.disconnect();
-
-            this.resizeObserver = new ResizeObserver(() => {
-                if (this.running) this.restart();
-            });
+            this.resizeObserver?.disconnect();
+            this.resizeObserver = new ResizeObserver(() => this.restart());
             this.resizeObserver.observe(this.traceElement);
         }
-
-        this.running = true;
-        const loop = () => {
-            if (!this.running) return;
-            this.frame();
-            this.animationFrameId = requestAnimationFrame(loop);
-        };
-        loop();
+        this._scheduleFrame();
     }
 
     stop() {
+        clearTimeout(this._resizeTimer);
         this.running = false;
-        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-        if (this.resizeObserver) this.resizeObserver.disconnect();
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        this.resizeObserver?.disconnect();
     }
 }
