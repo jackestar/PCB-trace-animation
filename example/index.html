@@ -1,15 +1,42 @@
 <!doctype html>
 <html lang="en">
+
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width,initial-scale=1" />
 	<title>PCB Trace Animation — Example</title>
 	<link rel="stylesheet" href="styles.css">
- </head>
+</head>
+
 <body>
 	<canvas id="pcb-trace-canvas" aria-label="PCB trace animation canvas"></canvas>
 
-	<script src="../src/pcb-trace-animation.js"></script>
-	<script src="example.js"></script>
+	<script type="module">
+		import PCBTraceAnimation from '../src/pcb-trace-animation.js'
+		const canvas = document.getElementById('pcb-trace-canvas');
+		const pcb = new PCBTraceAnimation(canvas, {
+			traceColor: '#00e6ff',
+			viaColor: '#00e6ff',
+			lineWidth: 1,
+			speed: 3,
+			lineSpacing: 1
+		});
+
+		function fitCanvas() {
+			pcb.initCanvas();
+		}
+
+		window.addEventListener('resize', fitCanvas);
+		fitCanvas();
+
+
+		pcb.drawLine(.65, .25, .30, true, false);
+		pcb.drawLine(.35, .25, .30, true, true);
+		pcb.drawLine(.65, .25, .50, false, false);
+		pcb.drawLine(.35, .25, .50, false, true);
+
+		pcb.start();
+	</script>
 </body>
+
 </html>
